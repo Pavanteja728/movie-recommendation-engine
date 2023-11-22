@@ -1,50 +1,50 @@
-import pandas as pd
-from sklearn.metrics.pairwise import cosine_similarity
+import boto3
+# Initialize AWS resources
+dynamodb = boto3.resource('dynamodb') s3 = boto3.client('s3')
+bucket_name = 'your_s3_bucket_name' # DynamoDB table name
+table_name = 'books'
+table = dynamodb.Table(table_name) def lambda_handler(event, context):
+# Get the HTTP method and path from the event http_method = event['httpMethod']
+path = event['path']
+# Handle different routes
+if http_method == 'GET' and path == '/movies': # Retrieve all movies from DynamoDB table response = table.scan()
+movies = response['Items'] return {
+'statusCode': 200, 'body': {
+'movies': movies
+}
+}
+elif http_method == 'GET' and path.startswith('/movie/'): # Extract movie ID from the path
+book_id = path.split('/')[-1]
+# Retrieve movie details from DynamoDB response = table.get_item(Key={'id': movie_id}) movie = response.get('Item')
 
-# Load the movie ratings data
-ratings_data = pd.read_csv('ratings.csv')
+if http_method == 'GET' and path == '/movies': # Retrieve all movies from DynamoDB table response = table.scan()
+books = response['Items'] return {
+'statusCode': 200, 'body': {
+'moviess': movie
+}
+}
+elif http_method == 'GET' and path.startswith('/movie/'): # Extract movie ID from the path
+book_id = path.split('/')[-1]
+# Retrieve movie details from DynamoDB response = table.get_item(Key={'id': book_id}) book = response.get('Item')
+# Generate a unique ID for the movie
+# You may use a UUID or any other method to generate a unique ID id = generate_unique_id()
+# Upload movie image to S3 image_file = body['image']
+s3.upload_fileobj(image_file, bucket_name, f'images/{id}.jpg') image_url = f'https://{bucket_name}.s3.amazonaws.com/images/{id}.jpg' # Add movie details to DynamoDB
+table.put_item( Item={
+'id': id, 'title': title,
+'author': author, 'description': description,
 
-# Load the movie metadata
-movies_metadata = pd.read_csv('movies.csv')
+'image_url': image_url
+}
+)
 
-# Merge the ratings and metadata based on movieId
-movie_data = pd.merge(ratings_data, movies_metadata, on='movieId')
 
-# Create a pivot table to represent the user ratings matrix
-user_ratings_matrix = movie_data.pivot_table(index='userId', columns='title', values='rating').fillna(0)
+}
+else:
 
-# Calculate the pairwise cosine similarity between users
-user_similarity = cosine_similarity(user_ratings_matrix)
+return { 'statusCode': 201,
+'body': 'Movie added successfully'
 
-# Function to recommend movies to a user
-def recommend_movies(user_id, num_recommendations=5):
-    # Get the index of the user
-    user_index = user_ratings_matrix.index.get_loc(user_id)
-    
-    # Calculate the average rating of the user
-    user_ratings = user_ratings_matrix.iloc[user_index].values.reshape(1, -1)
-    average_rating = user_ratings.mean()
-    
-    # Calculate the weighted average of user ratings and user similarity
-    weighted_ratings = user_similarity[user_index].reshape(1, -1) * (user_ratings - average_rating)
-    
-    # Calculate the similarity sum
-    similarity_sum = user_similarity[user_index].sum().reshape(1, -1)
-    
-    # Calculate the predicted ratings
-    predicted_ratings = average_rating + weighted_ratings / similarity_sum
-    
-    # Get the indices of the top-rated movies
-    top_movies_indices = predicted_ratings.argsort()[0][::-1][:num_recommendations]
-    
-    # Get the corresponding movie titles
-    top_movies = user_ratings_matrix.columns[top_movies_indices]
-    
-    return top_movies
-
-# Example usage
-user_id = 1
-recommended_movies = recommend_movies(user_id)
-print(f"Recommended movies for User {user_id}:")
-for movie in recommended_movies:
-    print(movie)
+return {
+'statusCode': 404, 'body': 'Route not found'
+}
